@@ -1,0 +1,9 @@
+#File that tells git which files to ignore 
+
+*~
+*.so
+*.d
+
+*.txt
+
+*#
