@@ -138,7 +138,7 @@ void Systematics() {
   }
 
 
-  TFile outf ("Sigma_Systematics.root", "RECREATE");
+  TFile outf ("output/Sigma_Systematics.root", "RECREATE");
 
   SigmaVsMom->Write("SigmaVsMom");
   MC_SigmaVsMom->Write("MC_SigmaVsMom");
