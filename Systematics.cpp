@@ -10,8 +10,8 @@
 
 void Systematics() {
 
-  Double_t ranges[] = {0, 100, 150, 200, 350, 500, 1600};
-  Int_t energyBins = 6;
+  Double_t ranges[] = {0, 100, 150, 200, 1600};
+  Int_t energyBins = 4;
 
   TFile f("output/MC_Energy-Momentum-Fraction.root");
 
