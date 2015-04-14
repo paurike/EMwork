@@ -15,6 +15,8 @@
 #include <string>       
 #include <iostream>     
 #include <sstream>  
+#include <TVirtualFitter.h>
+#include <TMatrixD.h>
 
 
 
@@ -63,9 +65,14 @@ double GausLandaufit(double *x, double *par);
 
 void GaussFitEnergyRange(TH1D * hist, Double_t &Sigma, Double_t &SigmaErr, Double_t &GaussMean, Double_t &GaussMeanErr);
 
-void GausLandauFitEnergyRange(TH1D *hist, Double_t fitMin, Double_t fitMax, Double_t &ComponentMean, Double_t &ComponentMeanErr, Double_t &ComponentSigma, Double_t &ComponentSigmaErr);
+void GausLandauFitEnergyRange(TH1D *hist, Double_t fitMin, Double_t fitMax, Double_t &ComponentMean, Double_t &ComponentMeanErr, Double_t &ComponentSigma, Double_t &ComponentSigmaErr, Double_t &FWHM);
 
 void GetArithmeticVars(TH1D *hist, Double_t &Mean, Double_t &MeanErr, Double_t &RMS, Double_t &RMSErr);
+
+void GetFWHM(TF1 func, Double_t &FWHM); 
+
+void PrintFitMatrices(TVirtualFitter * fitrp);
+
 
 
 //__________________________________________________________________________________________________________________________
@@ -83,7 +90,7 @@ void TailReader(char * filename) {
   TTree * NTuple = (TTree*) f.Get("emEnergyNtuple");
 
  //Make Variables of interest
-  Double_t TPCMomentum, MCMomentum, Energy, ReconFraction, fluxWeight,  MCFraction=0; 
+  Double_t TPCMomentum, MCMomentum, Energy, ReconFraction, fluxWeight=0,  MCFraction=0; 
 
   //Variable for containment cut, tpc cut and MC/Data distinction
   Double_t containment = 0;
@@ -97,7 +104,8 @@ void TailReader(char * filename) {
   NTuple->SetBranchAddress("containment", &containment);
   //NTuple->SetBranchAddress("tpcNTracks", &Ntpc);
   NTuple->SetBranchAddress("isData", &IsData);
-  //NTuple->SetBranchAddress("fluxWeight", &fluxWeight);
+  NTuple->SetBranchAddress("fluxWeighting", &fluxWeight);
+  //fluxWeight = 1;
 
  
   Int_t Nbins = 150;
@@ -150,13 +158,14 @@ void TailReader(char * filename) {
  
     
     EnergyDist->Fill(Energy);
-    ReconMomentumDist->Fill(TPCMomentum);
+    ReconMomentumDist->Fill(TPCMomentum, fluxWeight);
     //MCMomentumDist->Fill(MCMomentum);
 
     if(containment == 1){
 
       ReconFraction = (Energy-TPCMomentum)/(TPCMomentum);
-      ReconFractionDist->Fill(ReconFraction);
+      ReconFractionDist->Fill(ReconFraction, fluxWeight);
+      std::cout << "Flux Weight was: " << fluxWeight << std::endl;
       Two_e_Dist->Fill(Energy/TPCMomentum);
 
 
@@ -164,7 +173,7 @@ void TailReader(char * filename) {
 
 	if(ranges[j]<TPCMomentum && TPCMomentum <= ranges[j+1]){
 	  
-	  EnergyRangeHists[j]->Fill(ReconFraction);
+	  EnergyRangeHists[j]->Fill(ReconFraction, fluxWeight);
 	  break;
 	  
 	}
@@ -350,6 +359,8 @@ void TailReader(char * filename) {
 
   TH1D *MedianVsMom = new TH1D("MeanVsMom", "MeanVsMom", energyBins, ranges);
 
+  TH1D *FWHMVsMom = new TH1D("FWHMVsMom", "FWHMVsMom", energyBins, ranges);
+
 
 
 // Fit every energy range with a gaussian to look at the width with respect to TPC-momentum
@@ -386,11 +397,15 @@ void TailReader(char * filename) {
     Double_t ComponentSigmaErr=0;
     Double_t ComponentMean=0;
     Double_t ComponentMeanErr=0;
-    GausLandauFitEnergyRange(EnergyRangeHists[i], fitmins[i], fitmaxs[i], ComponentMean, ComponentMeanErr, ComponentSigma, ComponentSigmaErr );
+    Double_t FWHM = 0;
+    GausLandauFitEnergyRange(EnergyRangeHists[i], fitmins[i], fitmaxs[i], ComponentMean, ComponentMeanErr, ComponentSigma, ComponentSigmaErr, FWHM );
     ComponentMeanVsMom->SetBinContent(i+1, ComponentMean);
     ComponentMeanVsMom->SetBinError(i+1, ComponentMeanErr);
     ComponentSigmaVsMom->SetBinContent(i+1, ComponentSigma);
     ComponentSigmaVsMom->SetBinError(i+1, ComponentSigmaErr);
+
+    FWHMVsMom->SetBinContent(i+1, FWHM);
+    FWHMVsMom->SetBinError(i+1, ComponentSigmaErr);
 
   
     
@@ -409,15 +424,66 @@ void TailReader(char * filename) {
     MedianVsMom->SetBinContent(i+1, Median(EnergyRangeHists[i]));
     MedianVsMom->SetBinError(i+1, 1.253*Sigma/sqrt(EnergyRangeHists[i]->GetEntries()));
 
+
    
 
     std::cout << "Loop " << i << "completed" << std::endl;
   }
 
 
+  //FIt the total ReconFractionDist
+  Double_t Sigma;
+  Double_t SigmaErr;
+  Double_t GaussMean;
+  Double_t GaussMeanErr;
+  GaussFitEnergyRange(ReconFractionDist, Sigma, SigmaErr, GaussMean, GaussMeanErr);
+  std::cout << "Gaussian Fit of total ReconFractionDist:" << std::endl;
+  std::cout << "Sigma: " << Sigma <<" +/- " << SigmaErr << std::endl;
+  std::cout << "Mean: " << GaussMean << " +/- " << GaussMeanErr << std::endl;
+
+  TF1 * StraightGaussMean = new TF1("StraightGaussMean", "[0]", 0, 1600);
+  TF1 * StraightSigma = new TF1("StraightSigma", "[0]", 0, 1600);
+
+  StraightGaussMean->SetParameter(0, GaussMean);
+  StraightGaussMean->SetParError(0, 0);
+  StraightSigma->SetParameter(0, Sigma);
+  StraightSigma->SetParError(0, 0);
+  
+
+  TVirtualFitter * fitrp = TVirtualFitter::GetFitter(); 
+
+  PrintFitMatrices(fitrp);
+
+  
+
+  Double_t ComponentSigma;
+  Double_t ComponentSigmaErr;
+  Double_t ComponentMean; 
+  Double_t ComponentMeanErr;
+  Double_t FWHM;
+  GausLandauFitEnergyRange(ReconFractionDist, fitmins[0], fitmaxs[0], ComponentMean, ComponentMeanErr, ComponentSigma, ComponentSigmaErr, FWHM );
 
 
 
+
+  //Recover ReconFractionDist Fit:
+
+  //Create Fit-functions
+  //Superposition of Gaussian and Landau Distribution
+
+  TF1 *GausLandaufit = new TF1("GausLandaufit","[4]*TMath::Gaus(x,[0],[1])+[5]*TMath::Landau(x,[2],[3])",-2, 10);
+  GausLandaufit->SetParameters(ReconFractionDist->GetMean(), ReconFractionDist->GetRMS(), ReconFractionDist->GetMean(), ReconFractionDist->GetRMS(), 1, 4);
+  GausLandaufit->SetParNames("GausMean", "GausRMS", "LandauMean", "LandauRMS", "GausNorm", "LandauNorm");
+
+  TF1 *GausRes = new TF1("GausFitResult", "[0]*TMath::Gaus(x, [1],[2])", -2, 10);
+  GausRes->SetParameters(9.29572e2, -2.07390e-1, 2.71188e-1);
+  TF1 *LandauRes= new TF1("LandauFitResutl", "[0]*TMath::Landau(x, [1],[2])", -2, 10);
+  LandauRes->SetParameters(6.75116e3, 1.22781e-1, 1.59924e-1);
+
+std::cout<< "Fitting ReconFractionDist with a Superposition of a Gauss and a Landau function" << std::endl << std::endl;
+  ReconFractionDist->Fit("GausLandaufit", "", "", -2, 2);
+
+  
 
 
 
@@ -447,9 +513,9 @@ void TailReader(char * filename) {
   ReconMomentumDist->Write("ReconMomentumDist");
   MCMomentumDist->Write("MCMomentumDist");
   EnergyDist->Write("EnergyDist");
-  //GausLandaufit->Write("GausLandaufit");
-  // GausRes->Write("GausFitResult");
-//   LandauRes->Write("LandauFitResult");
+  GausLandaufit->Write("GausLandaufit");
+  GausRes->Write("GausFitResult");
+  LandauRes->Write("LandauFitResult");
   ReconMirrorDist->Write("ReconMirrorDist");
   ReconTailDist->Write("ReconTailDist");
   //crystalfit->Write("crystalfit");
@@ -476,8 +542,14 @@ void TailReader(char * filename) {
   ComponentMeanVsMom->Write("ComponentMeanVsMom");
   ComponentSigmaVsMom->Write("ComponentSigmaVsMom");
   MedianVsMom->Write("MedianVsMom");
+  FWHMVsMom->Write("FWHMVsMom");
+
+  StraightGaussMean->Write("StraightGaussMean");
+  StraightSigma->Write("StraightSigma");
 
 }
+
+
 
 
 
@@ -626,17 +698,18 @@ void GaussFitEnergyRange( TH1D * hist, Double_t &Sigma, Double_t &SigmaErr, Doub
 
 
 //function that performs the GausLandaufit on all the different range histograms and loads fit result into variables ComponentMean and ComponentSigma
-void GausLandauFitEnergyRange(TH1D *hist, Double_t fitMin, Double_t fitMax, Double_t &ComponentMean, Double_t &ComponentMeanErr, Double_t &ComponentSigma, Double_t &ComponentSigmaErr){
+void GausLandauFitEnergyRange(TH1D *hist, Double_t fitMin, Double_t fitMax, Double_t &ComponentMean, Double_t &ComponentMeanErr, Double_t &ComponentSigma, Double_t &ComponentSigmaErr, Double_t &FWHM){
 
   TF1 fit("fit", GausLandaufit, -2, 10, 6);
   fit.SetParNames("GausMean", "GausSigma", "LandauMean", "LandauRMS", "GausNorm", "LandauNorm");
   fit.SetParameters(hist->GetMean(), hist->GetRMS(), hist->GetMean(), hist->GetRMS(), 1, 4);
-   
   hist->Fit("fit", "", "", fitMin, fitMax);
   ComponentMean = fit.GetParameter(0);
   ComponentMeanErr = fit.GetParError(0);
   ComponentSigma = fit.GetParameter(1);
   ComponentSigmaErr = fit.GetParError(1);
+
+  GetFWHM(fit, FWHM);
 
   std::cout <<"Parameters of GausLandau Fit were found as Sigma: " << ComponentSigma << " and Mean: "<< ComponentMean << std::endl;
 
@@ -655,5 +728,55 @@ void GetArithmeticVars( TH1D *hist, Double_t &Mean, Double_t &MeanErr, Double_t 
   hist->SetAxisRange(-2, 4);
   std::cout <<"Arithmetic Parameters were found as RMS: " << RMS  << " and Mean: "<< Mean << std::endl;
 }
+
+void GetFWHM (TF1 func, Double_t &FWHM){
+
+  func.SetNpx(10000);
+  TH1* hist = (TH1D*)(func.GetHistogram()->Clone());
+  
+  int bin1 = hist->FindFirstBinAbove((hist->GetMaximum())/2);
+  int bin2 = hist->FindLastBinAbove((hist->GetMaximum())/2);
+  FWHM = hist->GetBinCenter(bin2 )- hist->GetBinCenter(bin1);
+
+  delete hist;
+
+
+} 
+
+
+
+// // code f r a g ment t o a c c e s s t he c o v a r i a n c e ma t r ix and t o c a l c u l a t e
+// //       t he c o r r e l a t i o n ma t r ix a f t e r p e r f o r m i n g a f i t i n Root with t he
+// // . F i t ( . . . ) method
+// // g e t t he c o v a r i a n c e and c o r r e l a t i o n m a t r i c e s
+
+
+void PrintFitMatrices(TVirtualFitter * fitrp) {
+
+  int nPar = fitrp->GetNumberTotalParameters();
+  TMatrixD covmat(nPar, nPar, fitrp->GetCovarianceMatrix());
+ 
+  std::cout << "The Covariance Matrix is: " << std::endl;
+  covmat.Print();
+
+  TMatrixD cormat(covmat);
+  for(int i=0; i<nPar; i++){
+    for(int j=0; j<nPar; j++){
+      cormat(i,j) /= sqrt(covmat(i,i)) * sqrt(covmat(j,j));
+    }
+  }
+
+  std::cout << "The Correlation Matrix is: " << std::endl;
+  cormat.Print();
+
+}
+
+
+// Double_t StraighLine(double *x, double *val) {
+ 
+//   return val[0];
+
+// }
+
 
 
