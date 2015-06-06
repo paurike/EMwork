@@ -275,14 +275,14 @@ void Fitter(TH1D* Data,TH1D *MC, TH1D* CleanEvents, TH1D* TailTemplate, Double_t
   Double_t ScaleFactor = Data->GetEntries()/MC->GetEntries();
   
   Double_t normStep=((CleanEvents->GetMaximum())*ScaleFactor*0.8)/steps;
-  Double_t meanStep=abs((CleanEvents->GetMean())*2.5/steps);
+  Double_t meanStep=abs((CleanEvents->GetMean())*40/steps);
   Double_t sigmaStep=(CleanEvents->GetRMS())*0.6/steps;
-  Double_t tailStep=ScaleFactor*0.15/steps;
+  Double_t tailStep=ScaleFactor*1.5/steps;
   
   Double_t normInit=(CleanEvents->GetMaximum())*0.7*ScaleFactor;
-  Double_t meanInit=(CleanEvents->GetMean())*4.0;
+  Double_t meanInit=(CleanEvents->GetMean())*20;
   Double_t sigmaInit=(CleanEvents->GetRMS())*0.5;
-  Double_t tailInit=0.85*ScaleFactor;
+  Double_t tailInit=0.5*ScaleFactor;
   
   Int_t Bins = Data->GetNbinsX();
 
