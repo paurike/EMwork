@@ -10,7 +10,5 @@
 
 *.lock*
 
-output
-images
 
 *#
