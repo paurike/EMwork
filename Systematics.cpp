@@ -11,10 +11,13 @@
 
 void Systematics() {
 
-  Double_t ranges[] = {0, 100, 150, 200, 1600};
-  Int_t energyBins = 4;
+//   Double_t ranges[] = {0, 100, 150, 200, 1600};
+//   Int_t energyBins = 4;
 
-  TFile f("output/MC_Energy-Momentum-Fraction.root");
+  Double_t ranges[] = {0, 200, 250, 1600};
+  Int_t energyBins = 3;
+
+  TFile f("output/MuonMC_Energy-Momentum-Fraction.root");
 
   TH1D *MC_SigmaVsMom;
   TH1D *MC_GaussMeanVsMom;
@@ -40,7 +43,7 @@ void Systematics() {
   MC_StraightSigma =(TF1*)f.Get("StraightSigma");
   MC_StraightSigma->SetName("MC_StraightSigma");
 
-  TFile g("output/DATA_Energy-Momentum-Fraction.root");
+  TFile g("output/MuonDATA_Energy-Momentum-Fraction.root");
    
   TH1D *DATA_SigmaVsMom;
   TH1D *DATA_GaussMeanVsMom;
@@ -84,14 +87,17 @@ void Systematics() {
   TF1 *StraightSigma = new TF1("StraightSigma", "[0]+DATA_StraightSigma-MC_StraightSigma", 0, 1600);
   StraightSigma->SetParameter(0, 0);
 
-  Double_t MC_GaussMeanError = MC_StraightGaussMean->GetParError(0);
-  Double_t DATA_GaussMeanError = DATA_StraightGaussMean->GetParError(0);
+  Double_t MC_GaussMeanError = MC_StraightGaussMean->GetParError(2);
+  Double_t DATA_GaussMeanError = DATA_StraightGaussMean->GetParError(2);
 
-  Double_t MC_SigmaError = MC_StraightGaussMean->GetParError(0);
-  Double_t DATA_SigmaError = DATA_StraightGaussMean->GetParError(0);
+  Double_t MC_SigmaError = MC_StraightGaussMean->GetParError(1);
+  Double_t DATA_SigmaError = DATA_StraightGaussMean->GetParError(1);
 
-  Double_t SigmaError = sqrt(pow(0.003, 2) + pow(0.012, 2));
-  Double_t GaussMeanError = sqrt(pow(0.003, 2) + pow(0.012, 2));
+  Double_t SigmaError = sqrt(pow(MC_SigmaError, 2) + pow(DATA_SigmaError, 2));
+  Double_t GaussMeanError = sqrt(pow(MC_GaussMeanError, 2) + pow(DATA_GaussMeanError, 2));
+
+//   Double_t SigmaError = sqrt(pow(0.003, 2) + pow(0.012, 2));
+//   Double_t GaussMeanError = sqrt(pow(0.003, 2) + pow(0.012, 2));
 
   std::cout << "GaussMeanError was propogated as: " << GaussMeanError << std::endl;
 
@@ -261,8 +267,8 @@ void Systematics() {
  canvas->Update();
  
 
-
- TFile outf ("output/Sigma_Systematics.root", "RECREATE");
+ //TFile outf ("output/ElectronPairSigma_Systematics.root", "RECREATE");
+ TFile outf ("output/MuonSigma_Systematics.root", "RECREATE");
 
  SigmaVsMom->Write("SigmaVsMom");
  MC_SigmaVsMom->Write("MC_SigmaVsMom");

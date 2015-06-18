@@ -79,7 +79,7 @@ void PrintFitMatrices(TVirtualFitter * fitrp);
 
 //MAIN FUNCTION
 
-void TailReader(char * filename) {
+void TailReader(char * filename, int muon) {
 
 
   //make TFile and read in the file to analyse
@@ -90,21 +90,31 @@ void TailReader(char * filename) {
   TTree * NTuple = (TTree*) f.Get("emEnergyNtuple");
 
  //Make Variables of interest
-  Double_t TPCMomentum, MCMomentum, Energy, ReconFraction, fluxWeight=0,  MCFraction=0; 
+  Double_t TPCMomentum, MCMomentum, Energy, ReconFraction, fluxWeight=0,  MCFraction=0, NTrajPhoton=0, nEcalReconObjects=0;
+  Double_t Cleanliness_Single=0, Cleanliness_Recursive=0, Cleanliness_Primary=0;
 
   //Variable for containment cut, tpc cut and MC/Data distinction
   Double_t containment = 0;
   Double_t Ntpc = 0;
   Double_t IsData = 0;
 
-  //Set Branchm Addresses
+  //Set Branch Addresses
   NTuple->SetBranchAddress("emEnergyCorrected", &Energy);
   NTuple->SetBranchAddress("tpcECalEntranceMomentumMag", &TPCMomentum);
-  //NTuple->SetBranchAddress("truthEcalEntranceMomentumMag", &MCMomentum);
   NTuple->SetBranchAddress("containment", &containment);
-  //NTuple->SetBranchAddress("tpcNTracks", &Ntpc);
+  NTuple->SetBranchAddress("tpcNTracks", &Ntpc);
   NTuple->SetBranchAddress("isData", &IsData);
   NTuple->SetBranchAddress("fluxWeighting", &fluxWeight);
+  NTuple->SetBranchAddress("nEcalReconObjects", &nEcalReconObjects);
+  NTuple->SetBranchAddress("Cleanliness_Single", &Cleanliness_Single);
+  NTuple->SetBranchAddress("Cleanliness_Primary", &Cleanliness_Primary);
+  NTuple->SetBranchAddress("Cleanliness_Recursive", &Cleanliness_Recursive);
+
+  //TruthBranches
+  if (!IsData){
+    NTuple->SetBranchAddress("NTrajPhoton", &NTrajPhoton);
+    NTuple->SetBranchAddress("truthEcalEntranceMomentumMag", &MCMomentum);}
+
   //fluxWeight = 1;
 
  
@@ -116,16 +126,42 @@ void TailReader(char * filename) {
   TH1D * EnergyDist = new TH1D ("EMEnergy", "EM-Energy", Nbins, 0, 15e3);
   TH1D * ReconMomentumDist = new TH1D ("TPCMomentum", "TPC-Momentum", Nbins, 0, 15e3);
   TH1D * MCMomentumDist = new TH1D ("MCMomentum", "MC-Momentum", Nbins, 0, 15e3);
-  TH1D * ReconFractionDist = new TH1D ("Energy-TPCMomentum", "(EMEnergy-TPCMomentum)/TPCMomentum", Nbins, -2, 10);
+  TH1D * ReconFractionDist = new TH1D ("Energy-TPCMomentum", "(EMEnergy-TPCMomentum)/TPCMomentum", BinsFraction1, -2, 10);
+  TH1D * SimpleCleanReconFractionDist = new TH1D ("SimpleClean Energy-TPCMomentum", "Clean (EMEnergy-TPCMomentum)/TPCMomentum", BinsFraction1, -2, 10);
+  TH1D * ScaledSimpleCleanReconFractionDist = new TH1D ("ScaledSimpleClean Energy-TPCMomentum", "Clean (EMEnergy-TPCMomentum)/TPCMomentum", BinsFraction1, -2, 10);
+  TH1D * ReverseCutTailTemplate = new TH1D ("ReverseCutTailTemplate", "ReverseCutTailTemplate", BinsFraction1, -2, 10);
+  TH1D * TailTemplate = new TH1D ("TailTemplate", "TailTemplate", BinsFraction1, -2, 10);
+  TH1D * RecursiveCleanReconFractionDist = new TH1D ("RecursiveClean Energy-TPCMomentum", "Clean (EMEnergy-TPCMomentum)/TPCMomentum", BinsFraction1, -2, 10);
+  TH1D * PrimaryCleanReconFractionDist = new TH1D ("RecursiveClean Energy-TPCMomentum", "Clean (EMEnergy-TPCMomentum)/TPCMomentum", BinsFraction1, -2, 10);
+  TH1D * UncontainedReconFractionDist = new TH1D ("Uncontained Energy-TPCMomentum", "Uncontained(EMEnergy-TPCMomentum)/TPCMomentum", Nbins, -2, 10);
   TH1D * MCFractionDist = new TH1D ("Energy-MCMomentum", "(EMEnergy-MCMomentum)/MCMomentum", Nbins, -2, 10);
   TH1D * TwoTrackReconFractionDist = new TH1D ("Energy-TPCMomentum", "(EMEnergy-TPCMomentum)/TPCMomentum", Nbins, -2, 10);
   TH1D * ThreeTrackReconFractionDist = new TH1D ("Energy-TPCMomentum", "(EMEnergy-TPCMomentum)/TPCMomentum", Nbins, -2, 10);
   TH1D * FourTrackReconFractionDist = new TH1D ("Energy-TPCMomentum", "(EMEnergy-TPCMomentum)/TPCMomentum", Nbins, -2, 10);
   TH1D * Two_e_Dist = new TH1D("EMEnergy/TPCMomentum", "(EMEnergy/TPCMomentum)", Nbins, -2, 10);
- 
 
-  Double_t ranges[] = {0, 100, 150, 200, 1600};
-  Int_t energyBins = 4;
+  Int_t balances = 10;
+  TH1D *BalancedReconFractionDists[balances];
+  
+  for(int i=0; i< balances; i++){
+    
+    std::stringstream HistNameStream;
+    HistNameStream << "N" << i << "BalancedFractionDist";
+    std::string HistName = HistNameStream.str();
+    const char * Name = HistName.c_str();
+    BalancedReconFractionDists[i] = new TH1D(Name, Name, BinsFraction1, -2, 10);
+
+  }
+
+  //if(muon){
+//     Double_t ranges[] = {0, 200, 250, 1600};
+//     Int_t energyBins = 3;
+    //}
+ //  else{
+    Double_t ranges[] = {0, 200, 1200};
+    Int_t energyBins = 2;
+//   }
+
   TH1D *EnergyRangeHists[energyBins];
   Double_t fitmins[] = {-2, -2, -2, -2};
   Double_t fitmaxs[] = {4, 2, 4, 4};
@@ -139,6 +175,50 @@ void TailReader(char * filename) {
     EnergyRangeHists[i] = new TH1D(Name, Name, BinsFraction1, -2, 10);
 
   }
+
+
+
+
+
+  //High and Low Energy Regime Histograms for the Simple Clean Fit
+
+  Double_t HighLowRegimes[] = {0, 200, 1200};
+  Int_t Regimes = 2;
+  TH1D* RegimeHistsClean[Regimes];
+  TH1D* RegimeHistsTail[Regimes];
+  TH1D* RegimeHistsTotal[Regimes];
+ 
+  for(int i=0; i< Regimes; i++){
+    
+    std::stringstream HistNameStream;
+    HistNameStream << "Regime" << i+1 << "CleanSample" ;
+    std::string HistName;
+    HistName= HistNameStream.str();
+    const char * Name = HistName.c_str();
+    RegimeHistsClean[i] = new TH1D(Name, Name, BinsFraction1, -2, 10);
+  }
+
+      
+  for(int i=0; i< Regimes; i++){
+    
+    std::stringstream HistNameStream;
+    HistNameStream << "Regime" << i+1 << "Tail" ;
+    std::string HistName = HistNameStream.str();
+    const char* Name = HistName.c_str();
+    RegimeHistsTail[i] = new TH1D(Name, Name, BinsFraction1, -2, 10);
+  }
+
+      
+  for(int i=0; i< Regimes; i++){
+    
+    std::stringstream HistNameStream;
+    HistNameStream << "Regime" << i+1 << "Total" ;
+    std::string HistName = HistNameStream.str();
+    const char* Name = HistName.c_str();
+    RegimeHistsTotal[i] = new TH1D(Name, Name, BinsFraction1, -2, 10);
+  }
+
+
 
 
   //Some extra Variables for the loop 
@@ -159,19 +239,46 @@ void TailReader(char * filename) {
     
     EnergyDist->Fill(Energy);
     ReconMomentumDist->Fill(TPCMomentum, fluxWeight);
-    //MCMomentumDist->Fill(MCMomentum);
+   
+    ReconFraction = (Energy-TPCMomentum)/(TPCMomentum);
+
+    UncontainedReconFractionDist->Fill(ReconFraction);
 
     if(containment == 1){
 
-      ReconFraction = (Energy-TPCMomentum)/(TPCMomentum);
+   
       ReconFractionDist->Fill(ReconFraction, fluxWeight);
       std::cout << "Flux Weight was: " << fluxWeight << std::endl;
-      Two_e_Dist->Fill(Energy/TPCMomentum);
+
+      //Cleanliness Cuts
+      if(Cleanliness_Single > 0.7){
+	SimpleCleanReconFractionDist->Fill(ReconFraction);
+      }else{ReverseCutTailTemplate->Fill(ReconFraction, fluxWeight);}
+
+      if(Cleanliness_Recursive == 1){
+	RecursiveCleanReconFractionDist->Fill(ReconFraction, fluxWeight);
+      }
+
+      if(Cleanliness_Primary == 1){
+	PrimaryCleanReconFractionDist->Fill(ReconFraction, fluxWeight);
+      }
 
 
+
+      //Balanced Recon Fraction Dists Loop #TPC track +k <= #ECal objects 
+
+      for(int k=0; k<balances; k++){
+
+	if(Ntpc+k <= nEcalReconObjects && Ntpc==2){
+	  BalancedReconFractionDists[k]->Fill(ReconFraction, fluxWeight);
+	}
+      }
+
+
+      //Energy Ranges Loop
       for(int j=0; j<energyBins; j++){
 
-	if(ranges[j]<TPCMomentum && TPCMomentum <= ranges[j+1]){
+	if(ranges[j]<TPCMomentum && TPCMomentum <= ranges[j+1] ){
 	  
 	  EnergyRangeHists[j]->Fill(ReconFraction, fluxWeight);
 	  break;
@@ -179,6 +286,29 @@ void TailReader(char * filename) {
 	}
 
       }
+
+
+      //Energy Regime Loop for Simple Clean Cut
+      
+      
+      for(int l=0; l<Regimes; l++){
+	
+	if(HighLowRegimes[l] < TPCMomentum && TPCMomentum <= HighLowRegimes[l+1]){
+	  
+	  
+	    RegimeHistsTotal[l]->Fill(ReconFraction, fluxWeight);
+	  
+		    
+	    if (Cleanliness_Single > 0.7){
+	      RegimeHistsClean[l]->Fill(ReconFraction, fluxWeight);}
+	    
+	    else {RegimeHistsTail[l]->Fill(ReconFraction, fluxWeight);}
+	    
+	  
+	}
+      }
+      
+      
 
       //if(MCMomentum != 0){
       //MCFraction = (Energy-MCMomentum)/(MCMomentum);
@@ -207,6 +337,39 @@ void TailReader(char * filename) {
 
    std::cout << "Number of rejected Events because of 0 MC-Momentum was: " << Reject << std::endl;
 
+
+   //Scale the CleanReconFraction Dist 
+
+   ScaledSimpleCleanReconFractionDist = (TH1D*)SimpleCleanReconFractionDist->Clone();
+   
+//    Double_t SimpleCleanMax = SimpleCleanReconFractionDist->GetMaximum();
+//    Int_t SimpleMaxBin = SimpleCleanReconFractionDist->GetMaximumBin();
+   
+//    Double_t ReconFractionMax = ReconFractionDist->GetBinContent(SimpleMaxBin);
+//    Double_t MaxRatio = ReconFractionMax/SimpleCleanMax;
+
+//    ScaledSimpleCleanReconFractionDist->Scale(MaxRatio);
+
+  
+   Double_t ReconFractionEntries = ReconFractionDist->GetEntries();
+   Double_t SimpleCleanEntries = SimpleCleanReconFractionDist->GetEntries();   
+   Double_t EntriesRatio = ReconFractionEntries/SimpleCleanEntries;
+
+   ScaledSimpleCleanReconFractionDist->Scale(EntriesRatio);
+
+   TailTemplate->Add(ReconFractionDist, 1);
+   TailTemplate->Add(ScaledSimpleCleanReconFractionDist, -1);
+
+   
+   TF1 CleanGaussian("CleanGaussian", "gaus", -2, 2);
+   SimpleCleanReconFractionDist->Fit("CleanGaussian", "", "", -2, 10);
+
+   TF1 CleanGaussian1("CleanGaussian1", "gaus", -2, 2);
+   RegimeHistsClean[0]->Fit("CleanGaussian1", "", "", -2, 10);
+   
+   TF1 CleanGaussian2("CleanGaussian2", "gaus", -2, 2);
+   RegimeHistsClean[1]->Fit("CleanGaussian2", "", "", -2, 10);
+   
 
 
   //Make histogramm with only negative part of fractional difference mirrored at 0
@@ -391,21 +554,21 @@ void TailReader(char * filename) {
 
   
 
-    std::cout << "GaussLandau Fit for " << ranges[i] << " MeV - " << ranges[i+1] << " Mev" << std::endl;
+//     std::cout << "GaussLandau Fit for " << ranges[i] << " MeV - " << ranges[i+1] << " Mev" << std::endl;
     
-    Double_t ComponentSigma=0;
-    Double_t ComponentSigmaErr=0;
-    Double_t ComponentMean=0;
-    Double_t ComponentMeanErr=0;
-    Double_t FWHM = 0;
-    GausLandauFitEnergyRange(EnergyRangeHists[i], fitmins[i], fitmaxs[i], ComponentMean, ComponentMeanErr, ComponentSigma, ComponentSigmaErr, FWHM );
-    ComponentMeanVsMom->SetBinContent(i+1, ComponentMean);
-    ComponentMeanVsMom->SetBinError(i+1, ComponentMeanErr);
-    ComponentSigmaVsMom->SetBinContent(i+1, ComponentSigma);
-    ComponentSigmaVsMom->SetBinError(i+1, ComponentSigmaErr);
+//     Double_t ComponentSigma=0;
+//     Double_t ComponentSigmaErr=0;
+//     Double_t ComponentMean=0;
+//     Double_t ComponentMeanErr=0;
+//     Double_t FWHM = 0;
+//     GausLandauFitEnergyRange(EnergyRangeHists[i], fitmins[i], fitmaxs[i], ComponentMean, ComponentMeanErr, ComponentSigma, ComponentSigmaErr, FWHM );
+//     ComponentMeanVsMom->SetBinContent(i+1, ComponentMean);
+//     ComponentMeanVsMom->SetBinError(i+1, ComponentMeanErr);
+//     ComponentSigmaVsMom->SetBinContent(i+1, ComponentSigma);
+//     ComponentSigmaVsMom->SetBinError(i+1, ComponentSigmaErr);
 
-    FWHMVsMom->SetBinContent(i+1, FWHM);
-    FWHMVsMom->SetBinError(i+1, ComponentSigmaErr);
+//     FWHMVsMom->SetBinContent(i+1, FWHM);
+//     FWHMVsMom->SetBinError(i+1, ComponentSigmaErr);
 
   
     
@@ -482,33 +645,49 @@ void TailReader(char * filename) {
 
 std::cout<< "Fitting ReconFractionDist with a Superposition of a Gauss and a Landau function" << std::endl << std::endl;
   ReconFractionDist->Fit("GausLandaufit", "", "", -2, 2);
+  ReconFractionDist->Fit("gaus", "", "", -2, 2);
 
   
 
 
 
 //----------------------------------------------------------------------------------------------------------------------------------------------
-  std::cout << "Number of entries in:" << std::endl;
-  std::cout << "Total Fractional Difference Distribution " << ReconFractionDist->GetEntries() << std::endl;
-  std::cout << "0-100 MeV: " << EnergyRangeHists[0]->GetEntries() << std::endl;
-  std::cout << "100-150 MeV: " << EnergyRangeHists[1]->GetEntries() << std::endl;
-  std::cout << "150-200 MeV: " << EnergyRangeHists[2]->GetEntries() << std::endl;
-  std::cout << "200-350 MeV: " << EnergyRangeHists[3]->GetEntries() << std::endl;
-//   std::cout << "350-500 MeV: " << EnergyRangeHists[4]->GetEntries() << std::endl;
-//   std::cout << "500-1600 MeV: " << EnergyRangeHists[5]->GetEntries() << std::endl;
-  std::cout << "Rejected due to containment cut: " << Reject << std::endl;
+//   std::cout << "Number of entries in:" << std::endl;
+//   std::cout << "Total Fractional Difference Distribution " << ReconFractionDist->GetEntries() << std::endl;
+//   std::cout << "0-100 MeV: " << EnergyRangeHists[0]->GetEntries() << std::endl;
+//   std::cout << "100-150 MeV: " << EnergyRangeHists[1]->GetEntries() << std::endl;
+//   std::cout << "150-200 MeV: " << EnergyRangeHists[2]->GetEntries() << std::endl;
+//   std::cout << "200-350 MeV: " << EnergyRangeHists[3]->GetEntries() << std::endl;
+// //   std::cout << "350-500 MeV: " << EnergyRangeHists[4]->GetEntries() << std::endl;
+// //   std::cout << "500-1600 MeV: " << EnergyRangeHists[5]->GetEntries() << std::endl;
+//   std::cout << "Rejected due to containment cut: " << Reject << std::endl;
 //---------------------------------------------------------------------------------------------------------------------------------------------
   //DEFINE OUTPUT AND WRITE TO FILE
 
   TFile *outf;
 
   if(IsData == 1){
-    outf = new TFile("output/DATA_Energy-Momentum-Fraction.root", "RECREATE");}
-  else{outf = new TFile("output/MC_Energy-Momentum-Fraction.root", "RECREATE");}
+    if(muon){outf = new TFile("output/MuonDATA_Energy-Momentum-Fraction.root", "RECREATE");}
+    else{outf = new TFile("output/ElectronPairDATA_Energy-Momentum-Fraction.root", "RECREATE");}
+  }
+  else{
+    if(muon){outf = new TFile("output/MuonMC_Energy-Momentum-Fraction.root", "RECREATE");}
+    else{outf = new TFile("output/ElectronPairMC_Energy-Momentum-Fraction.root", "RECREATE");}
+  }
 
   std::cout << "Output file was named " << outf->GetName() << std::endl;
 
   ReconFractionDist->Write("ReconFractionDist");
+  UncontainedReconFractionDist->Write("UncontainedReconFractionDist");
+  SimpleCleanReconFractionDist->Write("SimpleCleanReconFractionDist");
+  CleanGaussian.Write("CleanGaussian");
+  CleanGaussian1.Write("CleanGaussian1");
+  CleanGaussian2.Write("CleanGaussian2");
+  ScaledSimpleCleanReconFractionDist->Write("ScaledSimpleCleanReconFractionDist");
+  TailTemplate->Write("TailTemplate");
+  ReverseCutTailTemplate->Write("ReverseCutTailTemplate");
+  RecursiveCleanReconFractionDist->Write("RecursiveCleanReconFractionDist");
+  PrimaryCleanReconFractionDist->Write("PrimaryCleanReconFractionDist");
   MCFractionDist->Write("MCFractuionDist");
   ReconMomentumDist->Write("ReconMomentumDist");
   MCMomentumDist->Write("MCMomentumDist");
@@ -535,6 +714,23 @@ std::cout<< "Fitting ReconFractionDist with a Superposition of a Gauss and a Lan
     EnergyRangeHists[i]->Write(EnergyRangeHists[i]->GetTitle()); 
   }
 
+  for (int k=0; k<balances; k++){
+    BalancedReconFractionDists[k]->Write(BalancedReconFractionDists[k]->GetTitle());
+  }
+
+  BalancedReconFractionDists[0]->Draw();
+  for (int k=0; k<balances; k++){
+    BalancedReconFractionDists[k]->SetFillColor(kBlue-k);
+    BalancedReconFractionDists[k]->Draw("same");
+  }
+
+  for( int j=0; j<Regimes; j++){
+
+    RegimeHistsClean[j]->Write(RegimeHistsClean[j]->GetTitle());
+    RegimeHistsTail[j]->Write(RegimeHistsTail[j]->GetTitle());
+    RegimeHistsTotal[j]->Write(RegimeHistsTotal[j]->GetTitle());
+  }
+
   SigmaVsMom->Write("SigmaVsMom");
   GaussMeanVsMom->Write("GaussMeanVsMom");
   MeanVsMom->Write("MeanVsMom");
@@ -546,6 +742,9 @@ std::cout<< "Fitting ReconFractionDist with a Superposition of a Gauss and a Lan
 
   StraightGaussMean->Write("StraightGaussMean");
   StraightSigma->Write("StraightSigma");
+
+
+  outf->Close();
 
 }
 
