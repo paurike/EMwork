@@ -10,5 +10,8 @@
 
 *.lock*
 
+images/
+output/
+
 
 *#
