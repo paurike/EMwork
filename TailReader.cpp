@@ -126,7 +126,7 @@ void TailReader(char * filename, int muon) {
   TH1D * EnergyDist = new TH1D ("EMEnergy", "EM-Energy", Nbins, 0, 15e3);
   TH1D * ReconMomentumDist = new TH1D ("TPCMomentum", "TPC-Momentum", Nbins, 0, 15e3);
   TH1D * MCMomentumDist = new TH1D ("MCMomentum", "MC-Momentum", Nbins, 0, 15e3);
-  TH1D * ReconFractionDist = new TH1D ("Energy-TPCMomentum", "(EMEnergy-TPCMomentum)/TPCMomentum", BinsFraction1, -2, 10);
+  TH1D * ReconFractionDist = new TH1D ("Energy-TPCMomentum", "(EMEnergy-TPCMomentum)/TPCMomentum", Nbins, -2, 10);
   TH1D * SimpleCleanReconFractionDist = new TH1D ("SimpleClean Energy-TPCMomentum", "Clean (EMEnergy-TPCMomentum)/TPCMomentum", BinsFraction1, -2, 10);
   TH1D * ScaledSimpleCleanReconFractionDist = new TH1D ("ScaledSimpleClean Energy-TPCMomentum", "Clean (EMEnergy-TPCMomentum)/TPCMomentum", BinsFraction1, -2, 10);
   TH1D * ReverseCutTailTemplate = new TH1D ("ReverseCutTailTemplate", "ReverseCutTailTemplate", BinsFraction1, -2, 10);
@@ -158,9 +158,12 @@ void TailReader(char * filename, int muon) {
 //     Int_t energyBins = 3;
     //}
  //  else{
-    Double_t ranges[] = {0, 200, 1200};
-    Int_t energyBins = 2;
+  //Double_t ranges[] = {0, 200, 1200};
+  //Int_t energyBins = 2;
 //   }
+
+  Double_t ranges[] = {0, 100, 300, 1600};
+  Int_t energyBins = 3;
 
   TH1D *EnergyRangeHists[energyBins];
   Double_t fitmins[] = {-2, -2, -2, -2};
@@ -172,7 +175,7 @@ void TailReader(char * filename, int muon) {
     HistNameStream << "Range" << i+1 << "FractionDist";
     std::string HistName = HistNameStream.str();
     const char * Name = HistName.c_str();
-    EnergyRangeHists[i] = new TH1D(Name, Name, BinsFraction1, -2, 10);
+    EnergyRangeHists[i] = new TH1D(Name, Name,Nbins, -2, 10);
 
   }
 
@@ -246,9 +249,10 @@ void TailReader(char * filename, int muon) {
 
     if(containment == 1){
 
-   
+      if(TPCMomentum>100){
       ReconFractionDist->Fill(ReconFraction, fluxWeight);
       std::cout << "Flux Weight was: " << fluxWeight << std::endl;
+      }
 
       //Cleanliness Cuts
       if(Cleanliness_Single > 0.7){
@@ -880,9 +884,9 @@ void GaussFitEnergyRange( TH1D * hist, Double_t &Sigma, Double_t &SigmaErr, Doub
   
   //gSystem->Load("libMinuit");
 
-  TF1 Gaussian("Gaussian", "gaus", -0.9, 0.9);
+  TF1 Gaussian("Gaussian", "gaus", -0.9, 0.5);
   Gaussian.SetParameters(((hist->GetMaximum())/(hist->GetRMS())), hist->GetMean(), hist->GetRMS());
-  hist->Fit("Gaussian", "", "", -0.9, 0.9);
+  hist->Fit("Gaussian", "L", "", -0.9, 0.5);
   std::cout << "The simple Gauss fit has run properly" << std::endl;
   std::cout << "The Sigma Fitresult was: " << Gaussian.GetParameter(2) << std::endl;
 

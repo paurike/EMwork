@@ -8,16 +8,19 @@
 #include <math.h>
 #include <TCanvas.h>
 
+//Function Declaration
+double ChiSquared(TH1D * observed, TF1* flatHypothesis);
+
 
 void Systematics() {
 
-//   Double_t ranges[] = {0, 100, 150, 200, 1600};
-//   Int_t energyBins = 4;
+   Double_t ranges[] = {0, 100, 300, 1600};
+   Int_t energyBins = 3;
 
-  Double_t ranges[] = {0, 200, 250, 1600};
-  Int_t energyBins = 3;
+   //Double_t ranges[] = {0, 200, 250, 1600};
+   //Int_t energyBins = 3;
 
-  TFile f("output/MuonMC_Energy-Momentum-Fraction.root");
+  TFile f("output/ElectronPairMC_Energy-Momentum-Fraction.root");
 
   TH1D *MC_SigmaVsMom;
   TH1D *MC_GaussMeanVsMom;
@@ -43,7 +46,7 @@ void Systematics() {
   MC_StraightSigma =(TF1*)f.Get("StraightSigma");
   MC_StraightSigma->SetName("MC_StraightSigma");
 
-  TFile g("output/MuonDATA_Energy-Momentum-Fraction.root");
+  TFile g("output/ElectronPairDATA_Energy-Momentum-Fraction.root");
    
   TH1D *DATA_SigmaVsMom;
   TH1D *DATA_GaussMeanVsMom;
@@ -55,6 +58,7 @@ void Systematics() {
   TH1D *DATA_MedianVsMom;
   TF1 *DATA_StraightGaussMean;
   TF1 *DATA_StraightSigma;
+
   DATA_SigmaVsMom = (TH1D*)g.Get("SigmaVsMom")->Clone();
   DATA_GaussMeanVsMom =(TH1D*)g.Get("GaussMeanVsMom")->Clone();
   DATA_MeanVsMom = (TH1D*)g.Get("MeanVsMom")->Clone();
@@ -74,7 +78,7 @@ void Systematics() {
 
 
   TH1D *SigmaVsMom = new TH1D("SigmaVsMom", "MC-DATA of Sigma of Fractional Difference", energyBins, ranges);
-   TH1D *GaussMeanVsMom = new TH1D("GaussMeanVsMom", "MC-DATA of Arithmetic Mean of Fractional Difference", energyBins, ranges);
+  TH1D *GaussMeanVsMom = new TH1D("GaussMeanVsMom", "MC-DATA of Arithmetic Mean of Fractional Difference", energyBins, ranges);
   TH1D *MeanVsMom = new TH1D("MeanVsMom", "MC-DATA of Arithmetic Mean of Fractional Difference", energyBins, ranges);
   TH1D *RMSVsMom = new TH1D("RMSVsMom", "MC-DATA of RMS of Fractional Difference", energyBins, ranges);
   TH1D *ComponentSigmaVsMom = new TH1D("ComponentSigmaVsMom", "MC-DATA of gaussian Fit Component Sigma of Fractional Difference", energyBins, ranges);
@@ -87,17 +91,17 @@ void Systematics() {
   TF1 *StraightSigma = new TF1("StraightSigma", "[0]+DATA_StraightSigma-MC_StraightSigma", 0, 1600);
   StraightSigma->SetParameter(0, 0);
 
-  Double_t MC_GaussMeanError = MC_StraightGaussMean->GetParError(2);
-  Double_t DATA_GaussMeanError = DATA_StraightGaussMean->GetParError(2);
+  Double_t MC_GaussMeanError = MC_StraightGaussMean->GetParError(0);
+  Double_t DATA_GaussMeanError = DATA_StraightGaussMean->GetParError(0);
 
-  Double_t MC_SigmaError = MC_StraightGaussMean->GetParError(1);
-  Double_t DATA_SigmaError = DATA_StraightGaussMean->GetParError(1);
+  Double_t MC_SigmaError = MC_StraightSigma->GetParError(0);
+  Double_t DATA_SigmaError = DATA_StraightSigma->GetParError(0);
 
-  Double_t SigmaError = sqrt(pow(MC_SigmaError, 2) + pow(DATA_SigmaError, 2));
-  Double_t GaussMeanError = sqrt(pow(MC_GaussMeanError, 2) + pow(DATA_GaussMeanError, 2));
+  //Double_t SigmaError = sqrt(pow(MC_SigmaError, 2) + pow(DATA_SigmaError, 2));
+  //Double_t GaussMeanError = sqrt(pow(MC_GaussMeanError, 2) + pow(DATA_GaussMeanError, 2));
 
-//   Double_t SigmaError = sqrt(pow(0.003, 2) + pow(0.012, 2));
-//   Double_t GaussMeanError = sqrt(pow(0.003, 2) + pow(0.012, 2));
+  Double_t SigmaError = sqrt(pow(0.003, 2) + pow(0.012, 2));
+  Double_t GaussMeanError = sqrt(pow(0.003, 2) + pow(0.012, 2));
 
   std::cout << "GaussMeanError was propogated as: " << GaussMeanError << std::endl;
 
@@ -117,7 +121,7 @@ void Systematics() {
   StraightSigmaError2->SetParameter(0, SigmaError);
   
 
-  for(int i=0; i<8; i++){
+  for(int i=1; i<energyBins+1; i++){
 
     MC = MC_SigmaVsMom->GetBinContent(i);
     DATA = DATA_SigmaVsMom->GetBinContent(i);
@@ -134,7 +138,7 @@ void Systematics() {
 
   }
 
-  for(int i=0; i<8; i++){
+  for(int i=1; i<energyBins+1; i++){
 
     MC = MC_GaussMeanVsMom->GetBinContent(i);
     DATA = DATA_GaussMeanVsMom->GetBinContent(i);
@@ -152,7 +156,7 @@ void Systematics() {
   }
 
 
-    for(int i=0; i<8; i++){
+    for(int i=1; i<energyBins+1; i++){
 
     MC = MC_MeanVsMom->GetBinContent(i);
     DATA = DATA_MeanVsMom->GetBinContent(i);
@@ -170,7 +174,7 @@ void Systematics() {
   }
 
 
-  for(int i=0; i<8; i++){
+  for(int i=1; i<energyBins+1; i++){
 
     MC = MC_RMSVsMom->GetBinContent(i);
     DATA = DATA_RMSVsMom->GetBinContent(i);
@@ -188,7 +192,7 @@ void Systematics() {
   }
 
 
-  for(int i=0; i<8; i++){
+  for(int i=1; i<energyBins+1; i++){
 
     MC = MC_ComponentSigmaVsMom->GetBinContent(i);
     DATA = DATA_ComponentSigmaVsMom->GetBinContent(i);
@@ -206,7 +210,7 @@ void Systematics() {
   }
 
 
-  for(int i=0; i<8; i++){
+  for(int i=1; i<energyBins+1; i++){
 
     MC = MC_ComponentMeanVsMom->GetBinContent(i);
     DATA = DATA_ComponentMeanVsMom->GetBinContent(i);
@@ -223,7 +227,7 @@ void Systematics() {
 
   }
 
-  for(int i=0; i<8; i++){
+  for(int i=1; i<energyBins+1; i++){
 
     MC = MC_FWHMVsMom->GetBinContent(i);
     DATA = DATA_FWHMVsMom->GetBinContent(i);
@@ -240,7 +244,7 @@ void Systematics() {
 
   }
 
- for(int i=0; i<8; i++){
+ for(int i=1; i<energyBins+1; i++){
 
    MC = MC_MedianVsMom->GetBinContent(i);
    DATA = DATA_MedianVsMom->GetBinContent(i);
@@ -258,6 +262,17 @@ void Systematics() {
   }
 
 
+ //Calculating P-Value for Flat Hypothesis
+
+ double MeanChiFlat = ChiSquared(GaussMeanVsMom,StraightGaussMean);
+ double SigmaChiFlat = ChiSquared(SigmaVsMom, StraightSigma);
+
+ std::cout << "ChiSquared for flat hypothesis for MEAN: " << MeanChiFlat << std::endl;
+ std::cout << "ChiSquared for flat hypothesis for SIGMA: " << SigmaChiFlat << std::endl;
+
+
+
+
  TCanvas * canvas = new TCanvas();
  canvas->cd();
  SigmaVsMom->Draw();
@@ -267,8 +282,7 @@ void Systematics() {
  canvas->Update();
  
 
- //TFile outf ("output/ElectronPairSigma_Systematics.root", "RECREATE");
- TFile outf ("output/MuonSigma_Systematics.root", "RECREATE");
+ TFile outf ("output/ElectronPair_GaussianSystematics.root", "RECREATE");
 
  SigmaVsMom->Write("SigmaVsMom");
  MC_SigmaVsMom->Write("MC_SigmaVsMom");
@@ -321,5 +335,38 @@ void Systematics() {
 
 //   RMSVsMom->Draw("same E1");
 //   FWHMVsMom->Draw("same E1");
+
+}
+
+
+
+double ChiSquared(TH1D * observed, TF1* flatHypothesis) {
+
+  int bins = observed->GetNbinsX();
+  
+   
+
+  double chiSq =0;
+  double e = flatHypothesis->Eval(observed->GetBinCenter(1));
+  std::cout << "Flat hypothesis is: "<< e << std:: endl;
+
+  for (int i=1; i<bins+1; i++){
+
+    std::cout << "Bin: "<< i << std:: endl;
+    double o = observed->GetBinContent(i);
+    std::cout << "Observed Value is: " << o << std::endl;
+    double err = observed->GetBinError(i);
+    std::cout << "Bin Error is: "<< err << std:: endl;
+
+    chiSq = chiSq + pow((o-e)/err, 2);
+    //chiSq = chiSq - (bins-1);
+    
+    std::cout << "Chi Squared is: " << chiSq << std::endl;
+
+
+  }
+
+
+  return chiSq;
 
 }
